@@ -1,0 +1,412 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  username      String    @unique
+  password      String
+  email         String?   @unique
+  name          String?
+  role          String    @default("admin")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      AnalysisSession[]
+}
+
+model AnalysisSession {
+  id              String   @id @default(cuid())
+  title           String
+  status          String   @default("pending") // pending, processing, completed, failed
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  focusBrand      Brand?   @relation("FocusBrand")
+  competitors     Brand[]  @relation("CompetitorBrands")
+  analysisResult  AnalysisResult?
+  authorProfiles  AuthorProfile[]
+  postComments    PostComment[]
+  commentAnalysis CommentAnalysis?
+  universeKeywords String?  // Custom universe keywords for Share of Voice (comma-separated)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  completedAt     DateTime?
+  notificationRead Boolean @default(false)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Brand {
+  id                String   @id @default(cuid())
+  name              String
+  website           String?
+  instagramHandle   String?
+  tiktokHandle      String?
+  twitterHandle     String?
+  youtubeHandle     String?
+  facebookHandle    String?
+
+  // Relations
+  focusSessionId    String?  @unique
+  focusSession      AnalysisSession? @relation("FocusBrand", fields: [focusSessionId], references: [id], onDelete: Cascade)
+
+  competitorSessionId String?
+  competitorSession   AnalysisSession? @relation("CompetitorBrands", fields: [competitorSessionId], references: [id], onDelete: Cascade)
+
+  brandData         BrandData[]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([focusSessionId])
+  @@index([competitorSessionId])
+}
+
+model BrandData {
+  id              String   @id @default(cuid())
+  brandId         String
+  brand           Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  platform        String   // instagram, tiktok, twitter, youtube, facebook, website
+  rawData         String   // JSON string of API response
+  scrapedData     String?  // JSON string of scraped data
+  followerCount   Int?
+  postCount       Int?
+  engagementRate  Float?
+  avgPostPerDay   Float?
+  createdAt       DateTime @default(now())
+
+  @@index([brandId])
+  @@index([platform])
+}
+
+model AnalysisResult {
+  id                    String   @id @default(cuid())
+  sessionId             String   @unique
+  session               AnalysisSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // Stored as JSON strings
+  audienceComparison    String   // Follower comparisons by platform
+  postChannelData       String   // Post frequency by platform (pie chart data)
+  hashtagAnalysis       String   // Hashtag usage by brand
+  postTypeEngagement    String   // Post type & engagement rate
+  postTimingData        String   // Timeline graph data
+  brandEquityData       String   // Brand equity comparison
+  keywordClustering     String?  // Keyword clustering analysis
+  voiceAnalysis         String?  // Own & Earn Voice analysis
+  shareOfVoice          String?  // Share of Voice universe analysis (NEW)
+  aiInsights            String?  // AI-generated insights
+  aiKeywordInsights     String?  // AI insights for keyword clustering
+  additionalMetrics     String?  // Additional analysis data
+  dataQualityReport     String?  // Data quality assessment per brand/platform
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([sessionId])
+}
+
+model InstagramCache {
+  id              String   @id @default(cuid())
+  username        String   @unique
+  fullName        String?
+  followers       Int
+  following       Int
+  posts           Int
+  biography       String?
+  isVerified      Boolean  @default(false)
+  profilePicUrl   String?
+  scrapedAt       DateTime @default(now())
+
+  @@index([username])
+  @@index([scrapedAt])
+}
+
+model TiktokCache {
+  id              String   @id @default(cuid())
+  username        String   @unique
+  displayName     String?
+  followers       Int
+  following       Int
+  likes           Int
+  videos          Int
+  bio             String?
+  isVerified      Boolean  @default(false)
+  avatarUrl       String?
+  scrapedAt       DateTime @default(now())
+
+  @@index([username])
+  @@index([scrapedAt])
+}
+
+model AuthorProfile {
+  id              String   @id @default(cuid())
+  sessionId       String
+  session         AnalysisSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  username        String
+  displayName     String?
+  platform        String   // instagram, tiktok, twitter
+
+  // Metrics
+  followers       Int      @default(0)
+  following       Int      @default(0)
+  totalPosts      Int      @default(0)
+  verified        Boolean  @default(false)
+
+  avgLikes        Float?
+  avgComments     Float?
+  avgShares       Float?
+  engagementRate  Float?
+
+  // Posts (JSON array of Post objects)
+  recentPosts     String?  // JSON array
+
+  postFrequency   Float?   // posts per week
+
+  // AI Categorization (JSON object)
+  categories      String?  // JSON: { industry, contentType, audienceType, tone, topics }
+
+  // Brand Relationship
+  mentionCount    Int      @default(0)
+  lastMentionDate DateTime?
+  sentiment       String?  // positive, neutral, negative
+  brandAlignmentScore Float?
+
+  // Scoring
+  collaborationScore Float?
+  priority        String?  // high, medium, low
+
+  // Metadata
+  scrapedAt       DateTime @default(now())
+  profileUrl      String?
+  bio             String?
+  location        String?
+  website         String?
+
+  posts           AuthorPost[]
+
+  @@index([sessionId])
+  @@index([platform])
+  @@index([username])
+  @@index([collaborationScore])
+}
+
+model AuthorPost {
+  id          String   @id @default(cuid())
+  authorId    String
+  author      AuthorProfile @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  platform    String
+  postId      String   // Platform-specific ID
+  text        String?
+  publishedAt DateTime
+
+  likes       Int      @default(0)
+  comments    Int      @default(0)
+  shares      Int      @default(0)
+  engagement  Int      @default(0)
+
+  mediaType   String?  // photo, video, carousel, text
+  hashtags    String?  // JSON array
+  mentions    String?  // JSON array
+
+  createdAt   DateTime @default(now())
+
+  @@index([authorId])
+  @@index([platform])
+  @@index([postId])
+}
+
+// Comment tracking models
+model PostComment {
+  id              String   @id @default(cuid())
+  sessionId       String
+  session         AnalysisSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // Post identification
+  platform        String   // instagram, tiktok, twitter
+  postId          String   // Platform-specific post ID
+  postUrl         String?
+  postAuthor      String   // Brand or account that made the post
+
+  // Comment details
+  commentId       String   // Platform-specific comment ID
+  commentText     String
+  commentAuthor   String   // Username who made the comment
+  commentAuthorId String?  // Platform user ID
+
+  // Comment metrics
+  likes           Int      @default(0)
+  replies         Int      @default(0)
+
+  // Author info (snapshot)
+  authorFollowers Int?
+  authorVerified  Boolean  @default(false)
+  authorBio       String?
+
+  // Analysis
+  sentiment       String?  // positive, neutral, negative
+  topics          String?  // JSON array of detected topics
+  isBrandMention  Boolean  @default(false)
+  isQuestion      Boolean  @default(false)
+  isComplaint     Boolean  @default(false)
+  isPraise        Boolean  @default(false)
+
+  // Metadata
+  publishedAt     DateTime
+  scrapedAt       DateTime @default(now())
+
+  @@index([sessionId])
+  @@index([platform])
+  @@index([postAuthor])
+  @@index([commentAuthor])
+  @@index([sentiment])
+  @@index([publishedAt])
+  @@unique([platform, commentId])
+}
+
+model CommentAnalysis {
+  id                    String   @id @default(cuid())
+  sessionId             String   @unique
+  session               AnalysisSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // Overall metrics
+  totalComments         Int      @default(0)
+  avgCommentsPerPost    Float?
+
+  // Sentiment breakdown
+  positiveCount         Int      @default(0)
+  neutralCount          Int      @default(0)
+  negativeCount         Int      @default(0)
+
+  // Engagement patterns
+  topCommenters         String?  // JSON array [{username, count, followers}]
+  mostLikedComments     String?  // JSON array
+  commentThemes         String?  // JSON array of themes with counts
+
+  // Question & feedback analysis
+  questionCount         Int      @default(0)
+  complaintCount        Int      @default(0)
+  praiseCount           Int      @default(0)
+  commonQuestions       String?  // JSON array
+
+  // Time patterns
+  peakCommentHours      String?  // JSON array
+  avgResponseTime       Float?   // Minutes to first reply (if tracked)
+
+  // AI insights
+  aiSummary             String?  // AI-generated summary of comment trends
+  aiRecommendations     String?  // AI suggestions based on comments
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([sessionId])
+}
+
+// Buzznesia Models
+
+model BuznesiaClient {
+  id            String   @id @default(cuid())
+  name          String
+  industry      String?
+  campaigns     BuznesiaCampaign[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([name])
+}
+
+model BuznesiaCampaign {
+  id            String   @id @default(cuid())
+  name          String
+  year          Int
+  month         Int?     // 1-12
+  clientId      String
+  client        BuznesiaClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contents      BuznesiaContent[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([clientId])
+  @@index([year])
+  @@index([name])
+}
+
+model BuznesiaInfluencer {
+  id              String   @id @default(cuid())
+  socmedHandle    String   @unique
+  platform        String   // Instagram, TikTok, YouTube, Twitter
+  tier            String   // Nano, Micro, Macro, Mega
+  followers       Int
+  kolCategory     String?  // Beauty & Lifestyle, Tech, Food, etc.
+  contents        BuznesiaContent[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([platform])
+  @@index([tier])
+  @@index([socmedHandle])
+  @@index([kolCategory])
+}
+
+model BuznesiaContent {
+  id              String   @id @default(cuid())
+  campaignId      String
+  campaign        BuznesiaCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  influencerId    String
+  influencer      BuznesiaInfluencer @relation(fields: [influencerId], references: [id], onDelete: Cascade)
+
+  // Content Info
+  sow             String   // IG Reels, IG Story, TT Video, etc.
+  format          String?  // Content format
+  contentUrl      String?
+  uploadDate      DateTime?
+
+  // Performance Metrics (manual input)
+  impressions     Int      @default(0)
+  reach           Int      @default(0)
+  engagement      Int      @default(0)
+  views           Int      @default(0)
+  likes           Int      @default(0)
+  comments        Int      @default(0)
+  shares          Int      @default(0)
+  saves           Int      @default(0)
+
+  // Pricing
+  cost            Float    @default(0)
+
+  // Calculated Rates (formulas)
+  // IR% = impressions / followers
+  // RR% = reach / followers
+  // ER% = engagement / followers
+  // VR% = views / followers
+  // ERR% = engagement / reach
+
+  // Pricing per performance (formulas)
+  // CPI = cost / impressions
+  // CPR = cost / reach
+  // CPE = cost / engagement
+  // CPV = cost / views
+
+  // Additional Info
+  giftRevenue     Float?
+  itemsSold       Int?
+  linkInsight     String?  // JSON
+  linkBuildTapping String?  // JSON
+  permission      String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([influencerId])
+}
