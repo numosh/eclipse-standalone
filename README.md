@@ -541,7 +541,7 @@ Built with amazing open-source tools:
 
 ## Credits
 
-**Developed and maintained by Anugra Prahasta**
+**Developed and maintained by Anugrah Prahasta**
 **Trans Media Sosial © 2025**
 
 Data powered by TMS API
